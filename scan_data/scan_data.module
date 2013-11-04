@@ -1,0 +1,33 @@
+<?php
+require_once 'sites/all/modules/civicrm/civicrm.config.php';
+require_once 'sites/all/modules/civicrm/api/api.php';
+/**
+ * @file
+ * Renders file upload form for scan data module
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function scan_data_menu() {
+  $items = array();
+  $items['admin/scanner'] = array(
+    'title'             => t('Scanner Data'),
+    'description'       => 'Scanner Data Configuration',
+    'access arguments'  => array('administer site configuration'),
+    'page callback'     => 'scan_data_config',
+    'type'              => MENU_NORMAL_ITEM,
+    'file'              => 'admin_scan_data.inc'
+  );
+
+  $items['admin/scanner/config'] = array(
+    'title'             => t('Configure Scanner Data'),
+    'access arguments'  => array('administer site configuration'),
+    'page callback'     => 'scan_data_config',
+    'type'              => MENU_DEFAULT_LOCAL_TASK,
+    'weight'            => 1,
+    'file'              => 'admin_scan_data.inc'
+  );
+
+  return $items;
+}

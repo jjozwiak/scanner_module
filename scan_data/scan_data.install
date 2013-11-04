@@ -1,0 +1,53 @@
+<?php
+/**
+ *  @file
+ *  Install file for scan_data module.
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function scan_data_install() {
+  //Create tables
+  drupal_install_schema('scan_data');
+}
+
+/**
+ * Implementation of hook_schema().
+ */
+function scan_data_schema() {
+
+  $schema['scan_data_config'] = array(
+    'description' => t('TODO: please describe this table!'),
+    'fields' => array(
+      'id' => array(
+        'description' => t('TODO: please describe this field!'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'civicrm_table_name' => array(
+        'description' => t('TODO: please describe this field!'),
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'active' => array(
+        'description' => t('TODO: please describe this field!'),
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('id'),
+  );
+
+  return $schema;
+}
+
+ /**
+ * Implementation of hook_uninstall().
+ */
+function scan_data_uninstall() {
+  drupal_uninstall_schema('scan_data');
+}

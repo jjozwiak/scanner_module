@@ -1,0 +1,4 @@
+name = Expo Chi Event Attendance
+description =  A module to upload data that records when a VIP attended an event
+core = 6.x
+package = Expo Chicago

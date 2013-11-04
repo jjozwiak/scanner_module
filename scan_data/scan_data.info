@@ -1,0 +1,3 @@
+name = "Expo Scanner Data"
+description = "Allows Expo Chicago to upload scanner data and map to CiviCRM user records"
+core = 6.x

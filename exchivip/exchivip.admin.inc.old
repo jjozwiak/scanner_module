@@ -1,0 +1,113 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Administration page callbacks for the exacttarget_ga module.
+ */
+
+/**
+ * Form builder. Configure annotations.
+ *
+ * @ingroup forms
+ * @see system_settings_form().
+ */
+function exchivip_admin_settings() {	
+
+
+  $form['markup1'] = array(
+	'#type' => 'markup',
+    '#prefix' => '<div>',
+    '#value' => t('The button below will look at all the current users in CiviCRM and create a unique key for all the users. It will then add a custom URL which they can go to and provide information and create a user account.'),
+    '#suffix' => '</div>',
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit', 
+    '#default_value' => 'Generate URLS',
+  );
+
+  return $form;
+
+}
+//Generates random string to use in the unique url for end users
+function gen_uniqid() {
+	$char[0] = "ABCDEFGHIJ";
+	$char[1] = "KLMNPQRSTU";
+	$char[2] = "VWXYZabcde";
+	$char[3] = "fghijklmnp";
+	$char[4] = "qrstuvwxyz";
+	$char[5] = "0123456789";
+	$arr = preg_split('//', time(), -1, PREG_SPLIT_NO_EMPTY);
+
+	$uniqid = "";
+	foreach($arr as $val) {
+		$str = $char[rand(0,5)];
+		$uniqid .= $str{$val};
+	}
+	
+	//Recursive call that checks to see if the result in the database exsists and if it doesn't then return	
+	$query = "SELECT id FROM civicrm_value_unique_url_18 WHERE unique_id_61 = '".$uniqid."'";
+	$results = mysql_query($query);
+	
+	if($results->num_row > 0){
+		gen_uniqid();
+	}else{
+		return $uniqid;
+	}
+	
+	
+	return $uniqid;
+}
+function exchivip_admin_settings_submit($form,$form_state){
+	
+	
+	//NOTE: Turns out there is a limit to the civicrm api queries.  See rowCount key below.
+	//However, giving a high row count for this script exceeds the default max_execution_time of 30 in php.ini.
+	//I increased this setting to 1000 and the script ran successfully through all contacts. Not sure if this is the
+	//best option though. The offset key allows batching which may be an option worth exploring.
+	
+	//Set our paramaters for the contact get
+	//custom_61: Unique ID
+	//Custom_62: Unique URL
+	$params = array( 
+  	'return' => 'custom_61,custom_62',
+  	'version' => 3,
+	// Increase row count if there are more VIPs
+  	'rowCount' => 50000,
+  	//'offset' => 80, //- get 5000 records starting @ record 80
+	);
+
+	//Returns our contact requests
+  	$result = civicrm_api( 'contact','get',$params );
+
+	//Loop through all results, this will take awhile
+	foreach($result['values'] as $id => $values){
+		
+		//If the Unique ID is already set then don't set another one
+		if((!isset($values['custom_61']) || $values['custom_61'] == '') && $values['custom_61'] != 'active'){
+			
+			//check to make sure contact is in a VIP group before assigning a unique URL
+			$query = db_query("SELECT civicrm_group_contact.contact_id FROM civicrm_group_contact WHERE contact_id ='%s' AND status = 'Added' AND (group_id = 4 OR group_id = 5)",$id);
+			
+			if(mysql_num_rows($query) > 0){
+				
+				//Get our random string
+				$random_string = gen_uniqid();
+				//Create our URL based off the current host
+				$url = $_SERVER['HTTP_HOST'].'/vip/'.$random_string;
+				//Update the user in CiviCRM
+				exchivip_update(array('id'=>$id,'custom_62'=>$url,'custom_61'=>$random_string));	
+	
+			}			
+		}
+	}
+}
+
+function exchivip_update($params = array()){
+
+	$params['version'] = '3';
+	//pass array to update function		
+	civicrm_api("Contact", "create", $params);
+	
+}

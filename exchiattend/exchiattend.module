@@ -1,0 +1,23 @@
+<?php
+require_once 'sites/all/modules/civicrm/civicrm.config.php';
+require_once 'sites/all/modules/civicrm/api/api.php';
+
+/**
+* Implements hook_menu()
+*/
+
+function exchiattend_menu(){
+
+	$items = array();
+	
+	$items['admin/config/exchiattend/settings'] = array(
+    	'title' => 'Expo Chicago Event Attendance Uploads',
+    	'description' => 'Expo Chicago Event Attendance Uploads',
+    	'page callback' => 'drupal_get_form',
+    	'page arguments' => array('exchiattend_admin_settings'),
+    	'access arguments' => array('administer site configuration'),
+    	'type' => MENU_NORMAL_ITEM,
+    	'file' => 'exchiattend.admin.inc'
+  	);
+	return $items;
+}

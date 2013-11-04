@@ -1,0 +1,6 @@
+;; $Id: node_import.info,v 1.1.4.5 2009/01/15 16:39:19 robrechtj Exp $
+name = Scanner Data Import
+description = Importer for scanner data.
+core = 6.x
+php = 5
+

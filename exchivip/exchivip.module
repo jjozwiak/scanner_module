@@ -1,0 +1,192 @@
+<?php
+require_once 'sites/all/modules/civicrm/civicrm.config.php';
+require_once 'sites/all/modules/civicrm/api/api.php';
+
+/**
+* Implements hook_menu()
+*/
+
+function exchivip_menu(){
+
+	$items = array();
+	
+	$items['vip/%'] =  array(
+		'title' => 'vip',
+		'page callback' => 'exchivip_page',
+		'page arguments' => array(1),
+		'access callback' => 'exchivip_get_user',
+	);
+
+	$items['admin/config/exchivip/settings'] = array(
+    	'title' => 'Expo VIP URL Generation',
+    	'description' => 'Generates unique urls for civiCRM contacts',
+    	'page callback' => 'drupal_get_form',
+    	'page arguments' => array('exchivip_admin_settings'),
+    	'access arguments' => array('administer site configuration'),
+    	'type' => MENU_NORMAL_ITEM,
+    	'file' => 'exchivip.admin.inc'
+  	);
+
+	return $items;
+}
+
+/**
+* Gets the user values from CiviCRM and returns them
+* as an array
+**/
+function exchivip_get_user(){
+	$unique_id = arg(1);
+
+	//Run query to get the user's entity ID for contact data. This way prevents SQl injection. 
+	$query = db_query("SELECT civicrm_value_unique_url_18.entity_id FROM civicrm_value_unique_url_18 WHERE unique_id_61 ='%s'",$unique_id);
+	$user = db_fetch_object($query);
+		
+	//If we found a user then return the value
+	if($user != FALSE){
+		
+		$data = civicrm_api("Contact","get", array ('version' =>'3', 'contact_id' => $user->entity_id));
+		$id = $data['id'];
+		
+		//Check the civicrm_uf_match table. If the contact_id is in that table then 
+		//the user has already registered and we don't want them to be able to see this form.
+		$query = mysql_query("SELECT contact_id FROM civicrm_uf_match WHERE contact_id = '$id'");
+		
+		//print_r($data);
+		
+		if(mysql_num_rows($query) == 0){
+		
+			return $data;
+			
+		}
+			
+	}
+	
+	return FALSE;	
+}
+
+function exchivip_user($op, &$edit, &$account, $category = NULL){
+	if($op == 'insert'){
+	
+		$user = exchivip_get_user();		
+		$cid = $user['id'];
+		$mail = $account->mail;
+		
+		$results = mysql_query("SELECT contact_id FROM civicrm_email WHERE contact_id = '$cid'");
+		$count = mysql_num_rows($results);
+		if($count > 0){
+			mysql_query("UPDATE civicrm_email SET email = '$mail' WHERE contact_id = '$cid'");
+		}else{
+			mysql_query("INSERT INTO civicrm_email (`contact_id`,`location_type_id`,`email`,`is_primary`) VALUES ('$cid','1','$mail','1')");
+		}						
+	}
+	
+	if ($op == 'login' ){
+		GLOBAL $user;
+		$roles = $user->roles;
+		$login = $user->access;
+	
+		$uid = $user->uid;
+		$email = $user->mail;
+	   
+		//query civiCRM to get the user's group in order to determine a role id
+		//need to query civi using the global user's email to find the contact id
+		$contact_id_query = mysql_query("SELECT contact_id FROM civicrm_email WHERE email = '$email'");
+		$contact_query_results = mysql_fetch_array($contact_id_query);
+		$contact_id = $contact_query_results['contact_id'];
+	   
+	   	//once we have the civi contact id, let's query civiCRM again to 
+	   	//get that user's group and assign the role id
+	   	$group_query = mysql_query("SELECT group_id FROM civicrm_group_contact WHERE contact_id = '$contact_id' AND status = 'Added'");
+	   	$group_query_results = mysql_fetch_array($group_query);
+	   	$group_id = $group_query_results['group_id'];
+	
+		//!TODO map these ids with what is in production
+		if($group_id == 4){ $role = 4; }
+	   	if($group_id == 5){ $role = 5; }
+	
+	   	//check to see if user already has role assigned
+	   	$results = mysql_query("SELECT uid FROM drupal_users_roles WHERE uid = '$uid'");
+	   	$count = mysql_num_rows($results);
+	
+	   	//assign role
+	   	if($count == 0){
+    	   mysql_query("INSERT INTO drupal_users_roles (`uid`, `rid`) VALUES ('$uid', '$role')");   
+	   	}
+	
+		if( !in_array('Exhibitor',$roles) && $login == 0) {  //only redirect vip users to the vip profile page. 
+	   		$_REQUEST['destination'] = 'civicrm/profile/edit?reset=1&gid=17';
+		}
+	 }
+
+	
+}
+
+/**
+* Implements hook_form_alter()
+* Based on the unique URL, we will query the civiCRM Database and auto-populate
+* fields that we have values for.
+*/
+function exchivip_form_user_register_alter($form, $form_state){
+	
+	
+	$user = exchivip_get_user();
+	$cid = $user['id'];
+	
+	$email = (string)$user['values'][$cid]['email'];
+	
+	$results = mysql_query("SELECT organization_64 FROM civicrm_value_org_assoc_20 WHERE entity_id = '$cid'");
+	$count = mysql_num_rows($results);
+	$org_assoc = db_fetch_array($results);
+	
+	// Let's check to see if this is an anonymous contact given a url from a gallery or other org 
+	// so we can control the messaging.
+
+	$first_name = $user['values'][$cid]['first_name'];
+    $last_name = $user['values'][$cid]['last_name'];
+
+	$lower_first = strtolower($first_name);
+	$lower_last = strtolower($last_name);
+/*
+	if($lower_first == 'first name' || $lower_last == 'last name'){
+		$message = '<p style="width: 500px;">'.$org_assoc['organization_64'].' and Expo Chicago invite you to participate in our VIP Program. Please register your contact information and interests to receive progam details and credentials.</p><p>If you hav any question, please contact our VIP help desk <a href="mailto:vip@expochicago.com">vip@expochicago.com</a></p>';
+	}else{
+		$message = '<p style="width: 500px;">If this is not '.$first_name.' '.$last_name.', please contact the VIP Help Desk at 312.867.9220</p><p style="width: 500px;">Welcome '.$first_name.' '.$last_name.'! We are pleased to have you as a VIP guest to Expo Chicago 2013.</p><p style="width: 500px;">Please create an account below to get started.</p>';
+	}
+*/
+	$message = '<p style="width: 500px;">You have been invited to participate in our 2013 VIP program. Please register or update your contact information below to ensure prompt delivery of your VIP credentials, as well as access to special events and programming throughout the fair.</p><p style="width: 500px;">Returning users, please login in <a href="http://www.expochicago.com/vip/">here</a> to update your contact information.</p><p style="width: 500px;">New users, please register your contact information below.</p><p style="width: 500px;">Should you have any questions, or need assistance to logging in, contact the VIP Help Desk at <a href="mailto:vip@expochicago.com">vip@expochicago.com</a> | 312.867.9220</p>';
+	
+	$form['markup'] = array(
+		'#type' => 'markup',
+		'#value' => t($message),
+		'#weight' => -15,
+	);
+	$form['account']['name'] = array (
+            '#type' => 'textfield',
+            '#title' => t('Create Username'),
+            '#default_value' => '',
+            '#maxlength' => 60,
+            '#required' => 1,
+        );
+	$form['account']['mail'] = array(
+            '#type' => 'textfield',
+            '#title' => 'Email address',
+            '#default_value' => $email, 
+            '#maxlength' => 64,
+            '#description' => t('Email addresses will be used for Expo Chicago related news and notifications only. Email addresses will not be made public.'),
+            '#required' => 1
+        );
+	$form['account']['pass'] = array(
+            '#type' => 'password_confirm', 
+      	    '#title' => t('Create password'),
+      	    '#maxlength' => 64, 
+      	    '#size' => 25,
+      	    '#required' => 1
+    	);
+
+}
+function exchivip_page($unique_id){
+	$form = drupal_get_form('user_register');
+	
+	return $form;
+
+}
